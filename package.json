@@ -1,0 +1,21 @@
+{
+  "name": "microservices-demo",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "workspaces": [
+    "service-a",
+    "service-b",
+    "gateway"
+  ],
+  "scripts": {
+    "start:dev": "turbo run start:dev --parallel"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "turbo": "^2.7.2"
+  },
+  "packageManager": "npm@10.0.2"
+}
