@@ -4,11 +4,12 @@
   "description": "",
   "main": "index.js",
   "workspaces": [
-    "service-a",
-    "service-b",
-    "service-orders",
-    "service-clients",
-    "gateway"
+    "domains/ab/service-a",
+    "domains/ab/service-b",
+    "domains/ab/gateway-ab",
+    "domains/marketplace/service-orders",
+    "domains/marketplace/service-clients",
+    "domains/marketplace/gateway-marketplace"
   ],
   "scripts": {
     "start:dev": "turbo run start:dev --parallel",
