@@ -318,7 +318,7 @@ Vérifications :
 
 ## 🛠️ Étape 3 : Enregistrer Tous les Services
 
-Plutôt que répliquer le code pour chaque service, on peut créer une librairie commune [voir ce scénario alternatif](./TODO-CONSUL-LIB.md) 
+Plutôt que répliquer le code pour chaque service, on peut créer une librairie commune [voir ce scénario alternatif](./TODO_CONSUL_LIB.md) 
 
 ### 3.1 À FAIRE : Répliquer pour service-b
 
