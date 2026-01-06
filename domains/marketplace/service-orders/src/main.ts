@@ -8,8 +8,8 @@ async function bootstrap() {
     {
       transport: Transport.RMQ,
       options: {
-        urls: [process.env.RABBITMQ_URL || 'amqp://admin:admin@localhost:5672'],
-        queue: process.env.RABBITMQ_QUEUE || 'invoices',
+        urls: ['amqp://admin:admin@localhost:5672'],
+        queue: 'invoices',
         queueOptions: {
           durable: true,
         },
@@ -18,6 +18,6 @@ async function bootstrap() {
     },
   );
   await app.listen();
-  console.log(`Service Orders is listening to RabbitMQ queue: ${process.env.RABBITMQ_QUEUE || 'invoices'}`);
+  console.log('Service Orders is listening to RabbitMQ queue: invoices');
 }
 bootstrap();

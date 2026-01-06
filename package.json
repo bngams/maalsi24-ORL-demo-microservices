@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "workspaces": [
+    "shared/*",
     "domains/ab/service-a",
     "domains/ab/service-b",
     "domains/ab/gateway-ab",

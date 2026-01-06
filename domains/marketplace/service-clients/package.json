@@ -10,13 +10,13 @@
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",
-    "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^10.0.0",
     "@nestjs/microservices": "^10.0.0",
-    "amqp-connection-manager": "4.1.15",
     "amqplib": "^0.10.3",
+    "amqp-connection-manager": "4.1.15",
     "reflect-metadata": "^0.1.13",
-    "rxjs": "^7.8.0"
+    "rxjs": "^7.8.0",
+    "@shared/consul": "^1.0.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",

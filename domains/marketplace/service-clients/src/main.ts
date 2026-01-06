@@ -3,18 +3,22 @@ import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const port = parseInt(process.env.PORT || '3003');
-  const app = await NestFactory.createMicroservice<MicroserviceOptions>(
-    AppModule,
+  // Créer une application hybride (HTTP + TCP)
+  const app = await NestFactory.create(AppModule);
+
+  app.connectMicroservice<MicroserviceOptions>(
     {
       transport: Transport.TCP,
       options: {
-        host: '0.0.0.0',
-        port,
+        host: 'localhost',
+        port: 3003,
       },
     },
   );
-  await app.listen();
-  console.log(`Service Clients is listening on port ${port}`);
+  await app.startAllMicroservices();
+
+  await app.listen(3003, '0.0.0.0');
+
+  console.log('Service Clients is listening on port 3003');
 }
 bootstrap();
