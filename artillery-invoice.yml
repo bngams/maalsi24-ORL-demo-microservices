@@ -1,0 +1,30 @@
+config:
+  target: "http://localhost:3300"
+  phases:
+    - duration: 5
+      arrivalRate: 500   # 20 requests per second for 5 seconds
+  variables:
+    clientIds:
+      - 101
+      - 202
+      - 303
+      - 404
+      - 505
+      - 606
+      - 707
+      - 808
+      - 909
+      - 1001
+scenarios:
+  - flow:
+      - function: "generateRandomId"
+      - post:
+          url: "/clients/{{ randomId }}/generate-invoice"
+processor:
+  generateRandomId: |
+    function(userContext, events, done) {
+      // Pick a random id from the list or generate a random number
+      const ids = [101,202,303,404,505,606,707,808,909,1001];
+      userContext.vars.randomId = ids[Math.floor(Math.random() * ids.length)];
+      return done();
+    }

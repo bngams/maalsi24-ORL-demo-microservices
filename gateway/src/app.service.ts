@@ -6,6 +6,7 @@ export class AppService {
   constructor(
     @Inject('SERVICE_A_CLIENT') private readonly serviceAClient: ClientProxy,
     @Inject('SERVICE_B_CLIENT') private readonly serviceBClient: ClientProxy,
+    @Inject('CLIENTS_SERVICE') private readonly clientsService: ClientProxy,
   ) {}
 
   async getHello(): Promise<string> {
@@ -19,5 +20,9 @@ export class AppService {
       .toPromise();
 
     return `Service A: ${responseA}\nService B: ${responseB}`;
+  }
+
+  generateInvoice(clientId: string) {
+    return this.clientsService.send({ cmd: 'generate_invoice' }, { clientId });
   }
 }

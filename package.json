@@ -6,15 +6,19 @@
   "workspaces": [
     "service-a",
     "service-b",
+    "service-orders",
+    "service-clients",
     "gateway"
   ],
   "scripts": {
-    "start:dev": "turbo run start:dev --parallel"
+    "start:dev": "turbo run start:dev --parallel",
+    "test:artillery": "artillery run artillery-invoice.yml"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "artillery": "^2.0.27",
     "turbo": "^2.7.2"
   },
   "packageManager": "npm@10.0.2"
