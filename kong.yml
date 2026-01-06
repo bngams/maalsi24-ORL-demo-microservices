@@ -1,0 +1,18 @@
+_format_version: "3.0"
+_transform: true
+
+services:
+  - name: gateway-ab
+    url: http://host.docker.internal:3300
+    routes:
+      - name: gateway-ab-route
+        paths:
+          - /ab # http://localhost:8000/ab
+        strip_path: true
+  - name: gateway-marketplace
+    url: http://host.docker.internal:3301
+    routes:
+      - name: gateway-marketplace-route
+        paths:
+          - /marketplace # http://localhost:8000/marketplace
+        strip_path: true

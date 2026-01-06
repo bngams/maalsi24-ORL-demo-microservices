@@ -18,5 +18,22 @@ services:
       timeout: 10s
       retries: 5
 
+  kong:
+    image: kong:latest
+    container_name: kong
+    environment:
+      KONG_DATABASE: "off" # Mode DB-less (configuration via fichier)
+      KONG_DECLARATIVE_CONFIG: /usr/local/kong/declarative/kong.yml
+      KONG_ADMIN_LISTEN: "0.0.0.0:8001"
+      KONG_PROXY_LISTEN: "0.0.0.0:8000"
+      KONG_ADMIN_GUI_LISTEN: "0.0.0.0:8002"
+      # KONG_ADMIN_GUI_URL: "http://localhost:8002"
+    ports:
+      - "8000:8000"   # Port du proxy (entrée des requêtes)
+      - "8001:8001"   # Port de l'API d'administration
+      - "8002:8002"   # Port de l'interface d'administration
+    volumes:
+      - ./kong.yml:/usr/local/kong/declarative/kong.yml:ro
+
 volumes:
   rabbitmq_data:
