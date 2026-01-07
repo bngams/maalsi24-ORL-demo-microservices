@@ -21,7 +21,7 @@ let ConsulDiscoveryService = class ConsulDiscoveryService {
         this.options = options;
         this.consul = new Consul({
             host: options.consulHost || 'localhost',
-            port: options.consulPort || '8500',
+            port: String(options.consulPort || '8500'),
         });
     }
     async getServiceInstances(serviceName) {

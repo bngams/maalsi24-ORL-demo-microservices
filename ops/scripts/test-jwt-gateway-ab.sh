@@ -1,4 +1,30 @@
 #!/bin/bash
+#
+# JWT Authentication Test Script for Gateway AB
+#
+# This script tests JWT token validation and role-based access control
+# on the Gateway AB service with Keycloak integration.
+#
+# Usage:
+#   ./test-jwt-gateway-ab.sh
+#
+# Environment Variables (optional):
+#   GATEWAY_URL      Gateway AB base URL (default: http://localhost:3300)
+#   KEYCLOAK_URL     Keycloak base URL (default: http://localhost:8080)
+#   REALM            Keycloak realm name (default: microservices-realm)
+#   CLIENT_ID        Client ID (default: gateway-ab)
+#   CLIENT_SECRET    Client secret (default: gateway-ab-secret)
+#
+# Examples:
+#   # Test Docker deployment (default)
+#   ./test-jwt-gateway-ab.sh
+#
+#   # Test local development gateway with Docker Keycloak
+#   GATEWAY_URL=http://localhost:3000 ./test-jwt-gateway-ab.sh
+#
+#   # Test with custom Keycloak instance
+#   KEYCLOAK_URL=http://keycloak.example.com:8080 ./test-jwt-gateway-ab.sh
+#
 
 set -e
 
@@ -6,37 +32,52 @@ echo "🧪 Testing JWT Validation on Gateway AB"
 echo "========================================"
 echo ""
 
-GATEWAY_URL="http://localhost:3300"
-KEYCLOAK_URL="http://localhost:8080"
-REALM="microservices-realm"
-CLIENT_ID="gateway-ab"
-CLIENT_SECRET="gateway-ab-secret"
+# Allow environment variable overrides
+GATEWAY_URL="${GATEWAY_URL:-http://localhost:3300}"
+KEYCLOAK_URL="${KEYCLOAK_URL:-http://localhost:8080}"
+REALM="${REALM:-microservices-realm}"
+CLIENT_ID="${CLIENT_ID:-gateway-ab}"
+CLIENT_SECRET="${CLIENT_SECRET:-gateway-ab-secret}"
+
+echo "📝 Configuration:"
+echo "  Gateway URL:    $GATEWAY_URL"
+echo "  Keycloak URL:   $KEYCLOAK_URL"
+echo "  Realm:          $REALM"
+echo "  Client ID:      $CLIENT_ID"
+echo ""
 
 echo "0️⃣ Checking prerequisites..."
 echo ""
 
 # Check if gateway is running
 if ! curl -s -f -o /dev/null $GATEWAY_URL/health; then
-    echo "  ❌ Gateway AB is not running on port 3300"
+    echo "  ❌ Gateway AB is not accessible at $GATEWAY_URL"
     echo ""
-    echo "  Please start the gateway first:"
-    echo "    cd /Users/bngams/Courses/cesi/maalsi-24-ORL/microservices-demo"
-    echo "    npm run start:dev"
+    echo "  Please start the gateway:"
     echo ""
-    echo "  Or start only gateway-ab:"
+    echo "  Option 1 - Local development:"
     echo "    cd domains/ab/gateway-ab"
     echo "    npm run start:dev"
+    echo ""
+    echo "  Option 2 - Docker:"
+    echo "    npm run docker:up:ab"
+    echo "    # Gateway will be on port 3300"
     echo ""
     exit 1
 fi
 echo "  ✅ Gateway AB is running"
 
 # Check if Keycloak is running
-if ! curl -s -f -o /dev/null $KEYCLOAK_URL/realms/microservices-realm; then
-    echo "  ❌ Keycloak is not running on port 8080"
+if ! curl -s -f -o /dev/null $KEYCLOAK_URL/realms/$REALM; then
+    echo "  ❌ Keycloak is not accessible at $KEYCLOAK_URL"
     echo ""
-    echo "  Please start Keycloak first:"
-    echo "    docker compose up -d keycloak postgres-kc-db"
+    echo "  Please start Keycloak:"
+    echo ""
+    echo "  Option 1 - Infrastructure only:"
+    echo "    npm run docker:up"
+    echo ""
+    echo "  Option 2 - Full stack:"
+    echo "    npm run docker:up:ab"
     echo ""
     echo "  Then wait for it to be ready (30-60 seconds):"
     echo "    docker logs -f keycloak"

@@ -1,0 +1,151 @@
+services:
+  # RabbitMQ - Message Broker
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI port
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - microservices-network
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # PostgreSQL for Kong
+  postgres-kong-db:
+    image: postgres:15
+    container_name: kong-db
+    environment:
+      POSTGRES_DB: kong
+      POSTGRES_USER: kong
+      POSTGRES_PASSWORD: kong
+    volumes:
+      - postgres_data_kong:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kong"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Kong API Gateway
+  kong:
+    image: kong:latest
+    container_name: kong
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: postgres-kong-db
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: kong
+      KONG_PG_DATABASE: kong
+      KONG_DECLARATIVE_CONFIG: /usr/local/kong/declarative/kong.yml
+      KONG_ADMIN_LISTEN: "0.0.0.0:8001"
+      KONG_PROXY_LISTEN: "0.0.0.0:8000"
+      KONG_ADMIN_GUI_LISTEN: "0.0.0.0:8002"
+    ports:
+      - "8000:8000"   # Proxy port (API requests)
+      - "8001:8001"   # Admin API port
+      - "8002:8002"   # Admin GUI port
+    volumes:
+      - ../config/kong/kong.yml:/usr/local/kong/declarative/kong.yml:ro
+    depends_on:
+      postgres-kong-db:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Consul - Service Discovery
+  consul:
+    image: hashicorp/consul:latest
+    container_name: consul
+    ports:
+      - "8500:8500"   # HTTP API + Web UI
+      - "8600:8600/udp" # DNS server
+    command: agent -server -ui -bootstrap-expect=1 -client=0.0.0.0
+    environment:
+      CONSUL_BIND_INTERFACE: eth0
+    volumes:
+      - consul_data:/consul/data
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "consul", "members"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # PostgreSQL for Keycloak
+  postgres-kc-db:
+    image: postgres:15
+    container_name: keycloak-db
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+    volumes:
+      - postgres_data_kc:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Keycloak - Authentication & Authorization
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: keycloak
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres-kc-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KC_HOSTNAME_STRICT: false
+      KC_HTTP_ENABLED: true
+      KC_HOSTNAME_STRICT_HTTPS: false
+    volumes:
+      - ../config/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    ports:
+      - "8080:8080"
+    command: start-dev --import-realm
+    depends_on:
+      postgres-kc-db:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  rabbitmq_data:
+  consul_data:
+  postgres_data_kc:
+  postgres_data_kong:
+
+networks:
+  microservices-network:
+    driver: bridge

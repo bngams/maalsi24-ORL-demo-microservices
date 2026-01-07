@@ -1,0 +1,135 @@
+services:
+  # ==========================================
+  # Domain AB Services
+  # ==========================================
+  
+  # Gateway AB - HTTP Gateway with JWT Auth
+  gateway-ab:
+    build:
+      context: ../..
+      dockerfile: ops/docker/Dockerfile
+      args:
+        SERVICE_PATH: domains/ab/gateway-ab
+    container_name: docker-gateway-ab
+    ports:
+      - "3300:3300"
+    env_file:
+      - ../../domains/ab/gateway-ab/.env.docker
+    depends_on:
+      - consul
+      - keycloak
+    networks:
+      - microservices-network
+    profiles:
+      - ab
+      - all
+    restart: unless-stopped
+
+  # Service A - TCP Microservice
+  service-a:
+    build:
+      context: ../..
+      dockerfile: ops/docker/Dockerfile
+      args:
+        SERVICE_PATH: domains/ab/service-a
+    container_name: service-a
+    ports:
+      - "3001:3001"
+    env_file:
+      - ../../domains/ab/service-a/.env.docker
+    depends_on:
+      - consul
+    networks:
+      - microservices-network
+    profiles:
+      - ab
+      - all
+    restart: unless-stopped
+
+  # Service B - TCP Microservice
+  service-b:
+    build:
+      context: ../..
+      dockerfile: ops/docker/Dockerfile
+      args:
+        SERVICE_PATH: domains/ab/service-b
+    container_name: service-b
+    ports:
+      - "3002:3002"
+    env_file:
+      - ../../domains/ab/service-b/.env.docker
+    depends_on:
+      - consul
+    networks:
+      - microservices-network
+    profiles:
+      - ab
+      - all
+    restart: unless-stopped
+
+  # ==========================================
+  # Domain Marketplace Services
+  # ==========================================
+
+  # Gateway Marketplace - HTTP Gateway
+  gateway-marketplace:
+    build:
+      context: ../..
+      dockerfile: ops/docker/Dockerfile
+      args:
+        SERVICE_PATH: domains/marketplace/gateway-marketplace
+    container_name: docker-gateway-marketplace
+    ports:
+      - "3301:3301"
+    env_file:
+      - ../../domains/marketplace/gateway-marketplace/.env.docker
+    depends_on:
+      - consul
+    networks:
+      - microservices-network
+    profiles:
+      - marketplace
+      - all
+    restart: unless-stopped
+
+  # Service Clients - TCP + RabbitMQ Publisher
+  service-clients:
+    build:
+      context: ../..
+      dockerfile: ops/docker/Dockerfile
+      args:
+        SERVICE_PATH: domains/marketplace/service-clients
+    container_name: service-clients
+    ports:
+      - "3003:3003"
+    env_file:
+      - ../../domains/marketplace/service-clients/.env.docker
+    depends_on:
+      - consul
+      - rabbitmq
+    networks:
+      - microservices-network
+    profiles:
+      - marketplace
+      - all
+    restart: unless-stopped
+
+  # Service Orders - RabbitMQ Consumer
+  service-orders:
+    build:
+      context: ../..
+      dockerfile: ops/docker/Dockerfile
+      args:
+        SERVICE_PATH: domains/marketplace/service-orders
+    container_name: service-orders
+    env_file:
+      - ../../domains/marketplace/service-orders/.env.docker
+    depends_on:
+      - consul
+      - rabbitmq
+    networks:
+      - microservices-network
+    profiles:
+      - marketplace
+      - all
+    restart: unless-stopped

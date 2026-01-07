@@ -1,17 +1,27 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ConsulModule } from '@shared/consul';
 
 @Module({
   imports: [
-    ConsulModule.register({
-      serviceName: process.env.SERVICE_NAME || 'service-b',
-      servicePort: parseInt(process.env.SERVICE_PORT || '3002', 10),
-      serviceHost: process.env.SERVICE_HOST || 'host.docker.internal',
-      healthCheckPath: '/health',
-      healthCheckInterval: '10s',
-      tags: ['domain:ab', 'type:tcp'],
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
+    ConsulModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        serviceName: configService.get<string>('SERVICE_NAME') || 'service-b',
+        servicePort: configService.get<number>('PORT') || 3002,
+        serviceHost: configService.get<string>('SERVICE_HOST') || 'host.docker.internal',
+        consulHost: configService.get<string>('CONSUL_HOST') || 'localhost',
+        consulPort: configService.get<string>('CONSUL_PORT') || '8500',
+        healthCheckPath: '/health',
+        healthCheckInterval: '10s',
+        tags: ['domain:ab', 'type:tcp'],
+      }),
+      inject: [ConfigService],
     }),
   ],
   controllers: [AppController],

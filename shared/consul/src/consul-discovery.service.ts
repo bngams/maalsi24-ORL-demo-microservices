@@ -10,7 +10,7 @@ export class ConsulDiscoveryService {
   constructor(@Inject(CONSUL_OPTIONS) private options: ConsulModuleOptions) {
     this.consul = new Consul({
       host: options.consulHost || 'localhost',
-      port: options.consulPort || '8500',
+      port: String(options.consulPort || '8500'),
     });
   }
 

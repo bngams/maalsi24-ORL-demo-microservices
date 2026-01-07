@@ -29,11 +29,13 @@ export class ConsulModule {
    * Enregistrement asynchrone (pour récupérer la config depuis un ConfigService)
    */
   static registerAsync(options: {
+    imports?: any[];
     useFactory: (...args: any[]) => Promise<ConsulModuleOptions> | ConsulModuleOptions;
     inject?: any[];
   }): DynamicModule {
     return {
       module: ConsulModule,
+      imports: options.imports || [],
       providers: [
         {
           provide: CONSUL_OPTIONS,
@@ -41,8 +43,9 @@ export class ConsulModule {
           inject: options.inject || [],
         },
         ConsulService,
+        ConsulDiscoveryService,
       ],
-      exports: [ConsulService],
+      exports: [ConsulService, ConsulDiscoveryService],
       global: false,
     };
   }

@@ -21,12 +21,12 @@ let ConsulService = class ConsulService {
         this.options = options;
         this.consul = new Consul({
             host: options.consulHost || process.env.CONSUL_HOST || 'localhost',
-            port: options.consulPort || process.env.CONSUL_PORT || '8500',
+            port: String(options.consulPort || process.env.CONSUL_PORT || '8500'),
         });
     }
     async onModuleInit() {
         const serviceName = this.options.serviceName;
-        const servicePort = this.options.servicePort;
+        const servicePort = parseInt(String(this.options.servicePort));
         const serviceHost = this.options.serviceHost || 'host.docker.internal';
         const healthCheckPath = this.options.healthCheckPath || '/health';
         this.serviceId = `${serviceName}-${servicePort}`;

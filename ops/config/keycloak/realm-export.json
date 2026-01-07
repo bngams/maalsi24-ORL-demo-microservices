@@ -4,6 +4,7 @@
     "realm": "microservices-realm",
     "enabled": true,
     "displayName": "Microservices Realm",
+    "sslRequired": "none",
     "roles": {
       "realm": [
         {

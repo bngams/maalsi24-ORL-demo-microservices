@@ -14,7 +14,16 @@
   ],
   "scripts": {
     "start:dev": "turbo run start:dev --parallel",
-    "test:artillery": "artillery run artillery-invoice.yml"
+    "test:artillery": "artillery run artillery-invoice.yml",
+    "docker:env-check": "bash ops/docker/env-check.sh",
+    "docker:build": "cd ops/docker && docker compose build",
+    "docker:up": "cd ops/docker && docker compose up -d",
+    "docker:up:ab": "cd ops/docker && docker compose --profile ab up -d",
+    "docker:up:marketplace": "cd ops/docker && docker compose --profile marketplace up -d",
+    "docker:up:all": "cd ops/docker && docker compose --profile all up -d",
+    "docker:down": "cd ops/docker && docker compose --profile all down",
+    "docker:logs": "cd ops/docker && docker compose logs -f",
+    "docker:ps": "cd ops/docker && docker compose ps"
   },
   "keywords": [],
   "author": "",

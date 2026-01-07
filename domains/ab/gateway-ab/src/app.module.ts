@@ -3,6 +3,7 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 // import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ConsulModule } from '@shared/consul/dist/consul.module';
 import { AppDnsService } from './app-dns.service';
@@ -30,12 +31,19 @@ import { AuthModule } from './auth/auth.module';
   //   ]),
   // ],
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
     AuthModule, // Module d'authentification JWT
-    ConsulModule.register({
-      serviceName: 'gateway-ab',
-      servicePort: 3300,
-      consulHost: 'localhost',
-      consulPort: '8500',
+    ConsulModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        serviceName: 'gateway-ab',
+        servicePort: configService.get<number>('PORT') || 3300,
+        consulHost: configService.get<string>('CONSUL_HOST') || 'localhost',
+        consulPort: configService.get<string>('CONSUL_PORT') || '8500',
+      }),
+      inject: [ConfigService],
     }),
   ],
   controllers: [AppController],

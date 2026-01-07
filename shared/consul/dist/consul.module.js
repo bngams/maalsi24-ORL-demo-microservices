@@ -31,6 +31,7 @@ let ConsulModule = ConsulModule_1 = class ConsulModule {
     static registerAsync(options) {
         return {
             module: ConsulModule_1,
+            imports: options.imports || [],
             providers: [
                 {
                     provide: consul_constants_1.CONSUL_OPTIONS,
@@ -38,8 +39,9 @@ let ConsulModule = ConsulModule_1 = class ConsulModule {
                     inject: options.inject || [],
                 },
                 consul_service_1.ConsulService,
+                consul_discovery_service_1.ConsulDiscoveryService,
             ],
-            exports: [consul_service_1.ConsulService],
+            exports: [consul_service_1.ConsulService, consul_discovery_service_1.ConsulDiscoveryService],
             global: false,
         };
     }

@@ -1,0 +1,15 @@
+# Master Docker Compose file
+# This file orchestrates both infrastructure and application services
+#
+# Usage:
+#   - Start all infrastructure: docker compose up -d
+#   - Start infrastructure + AB domain: docker compose --profile ab up -d
+#   - Start infrastructure + Marketplace domain: docker compose --profile marketplace up -d
+#   - Start everything: docker compose --profile all up -d
+#
+# Note: Infrastructure services (compose-tools.yml) start by default
+# Application services (compose-apps.yml) require explicit profiles
+
+include:
+  - compose-tools.yml
+  - compose-apps.yml
