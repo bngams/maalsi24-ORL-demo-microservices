@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 // import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ConsulModule } from '@shared/consul/dist/consul.module';
 import { AppDnsService } from './app-dns.service';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   //imports: [
@@ -29,6 +30,7 @@ import { AppDnsService } from './app-dns.service';
   //   ]),
   // ],
   imports: [
+    AuthModule, // Module d'authentification JWT
     ConsulModule.register({
       serviceName: 'gateway-ab',
       servicePort: 3300,

@@ -619,24 +619,135 @@ MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
 
 **Note** : Vous devez récupérer la clé publique depuis le JWKS endpoint de Keycloak.
 
-### 4.6 Alternative Simplifiée : Valider JWT dans NestJS (Recommandé pour ce Tutoriel)
+### 4.6 Choisir Votre Approche : Option A ou Option B
 
-Pour simplifier, nous allons **ignorer la validation dans Kong** et la faire directement dans les **gateways NestJS** (Étape 5).
+Vous avez maintenant **deux options** pour implémenter la sécurité JWT. Les deux sont valides et ont leurs avantages.
 
-Kong servira uniquement de **reverse proxy** sans validation JWT.
+---
 
-**Retirez le plugin JWT de `kong.yml`** si vous choisissez cette approche.
+#### **Option A : Kong avec JWT (Recommandé pour Production)**
+
+**Avantages** :
+- ✅ Validation centralisée au niveau de l'API Gateway
+- ✅ Les services backend n'ont pas besoin de valider JWT
+- ✅ Meilleures performances (une seule validation)
+- ✅ Politiques d'authentification centralisées
+
+**Comment activer Option A** :
+
+Un script automatisé a été préparé pour configurer Kong avec JWT :
+
+```bash
+# Depuis la racine du projet
+./ops/scripts/kong-jwt-setup.sh
+```
+
+Ce script va :
+1. Configurer les services et routes dans Kong
+2. Activer le plugin JWT sur les deux services
+3. Créer un consumer Keycloak
+4. Extraire et configurer la clé publique RSA depuis Keycloak
+
+**Tester Option A** :
+
+```bash
+# 1. Obtenir un token
+TOKEN=$(curl -s -X POST 'http://localhost:8080/realms/microservices-realm/protocol/openid-connect/token' \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d 'client_id=gateway-ab' \
+  -d 'client_secret=gateway-ab-secret' \
+  -d 'grant_type=password' \
+  -d 'username=alice' \
+  -d 'password=password' | jq -r '.access_token')
+
+# 2. Tester sans token (doit échouer - 401 de Kong)
+curl http://localhost:8000/ab/protected
+
+# 3. Tester avec token (doit réussir si le service répond)
+curl http://localhost:8000/ab/protected \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Note** : Avec cette option, Kong rejette les requêtes sans token valide **avant** qu'elles n'atteignent vos services.
+
+---
+
+#### **Option B : Validation JWT dans NestJS (Recommandé pour ce Tutoriel)**
+
+**Avantages** :
+- ✅ Configuration Kong plus simple (aucun changement nécessaire)
+- ✅ Contrôle fin dans chaque service
+- ✅ Plus facile à comprendre pour l'apprentissage
+- ✅ Chaque service gère sa propre sécurité
+
+**Comment activer Option B** :
+
+Option B utilise la **configuration Kong actuelle** (pas de changements nécessaires) :
+- Le fichier `ops/config/kong/kong.yml` ne contient **pas de plugin JWT**
+- Kong agit comme un simple reverse proxy
+- ⚠️ **La validation JWT doit être implémentée dans les gateways NestJS** → **Continuez avec l'Étape 5**
+
+**Actions requises pour Option B** :
+1. ✅ Kong est déjà configuré (aucun changement)
+2. 🔨 **Passez à l'Étape 5** pour implémenter la validation JWT dans NestJS
+3. 🧪 Testez après avoir complété l'Étape 5
+
+**Note importante** : Avec Option B, Kong ne vérifie PAS les tokens - il transmet toutes les requêtes. La sécurité sera assurée par les gateways NestJS une fois l'Étape 5 complétée.
+
+---
+
+### 4.7 Comparaison des Options
+
+| Critère | Option A (Kong JWT) | Option B (NestJS JWT) |
+|---------|---------------------|----------------------|
+| **Complexité setup** | ⚠️ Plus complexe | ✅ Simple |
+| **Performance** | ✅ Meilleure (1 validation) | ⚠️ Acceptable (N validations) |
+| **Sécurité** | ✅ Centralisée | ⚠️ Dispersée |
+| **Flexibilité** | ⚠️ Moins flexible | ✅ Plus flexible |
+| **Production** | ✅ Recommandé | ⚠️ OK mais moins optimal |
+| **Apprentissage** | ⚠️ Plus à apprendre | ✅ Plus progressif |
+
+### 4.8 Recommandation Pédagogique
+
+Pour ce tutoriel, nous recommandons :
+
+1. **Choisir Option B** (configuration Kong actuelle suffit)
+2. **Passer directement à l'Étape 5** pour implémenter la validation JWT dans NestJS
+3. **Compléter les Étapes 5-7** (intégration NestJS complète)
+4. **Optionnellement, revenir et tester Option A** pour comparer les approches
+
+**Pourquoi commencer avec Option B ?** 
+- Vous comprenez **comment fonctionne JWT** en l'implémentant vous-même dans NestJS
+- Configuration plus progressive (d'abord apprendre, ensuite optimiser)
+- Une fois que vous maîtrisez la validation JWT, vous pouvez apprécier les avantages de la centralisation avec Option A
+
+**Note importante** : Les deux options nécessitent l'Étape 5 !
+- **Option A** : Kong valide JWT + NestJS peut ajouter des vérifications supplémentaires (optionnel)
+- **Option B** : Seul NestJS valide JWT (Kong transmet tout)
+
+---
 
 ### ✅ Point de Contrôle 4
 
-**Option A (Kong avec JWT)** :
-- ✅ Kong en mode DB configuré
-- ✅ Plugin JWT activé
-- ✅ Consumer Keycloak créé
+**Choisissez UNE des deux options** :
 
-**Option B (Simplifiée - Recommandée pour ce tutoriel)** :
-- ✅ Kong reste en reverse proxy simple
-- ✅ Validation JWT déléguée aux gateways NestJS
+**Option A (Kong avec JWT)** :
+- ✅ Script `kong-jwt-setup.sh` exécuté avec succès
+- ✅ Plugin JWT activé sur les services Kong
+- ✅ Consumer Keycloak créé avec clé publique RSA
+- ✅ Tests réussis (401 sans token de Kong directement)
+- ⏭️ Passez à l'Étape 5 (optionnel pour renforcer la sécurité)
+
+**Option B (Configuration actuelle - Recommandée pour débuter)** :
+- ✅ Kong configuré en reverse proxy simple (aucun changement requis)
+- ✅ Pas de plugin JWT dans `kong.yml` (configuration par défaut)
+- ⚠️ **Validation JWT pas encore implémentée** - Kong transmet tout sans vérification
+- 🔨 **ACTION REQUISE : Passez à l'Étape 5** pour implémenter la sécurité dans NestJS
+
+**💡 Conseil** : 
+- **Débutants** : Choisissez Option B → Étape 5 pour apprendre JWT
+- **Production** : Utilisez Option A pour la sécurité centralisée
+- Vous pouvez basculer entre les deux options à tout moment (voir `ops/config/kong/README.md`)
 
 ---
 

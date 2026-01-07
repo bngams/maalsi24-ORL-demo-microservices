@@ -16,27 +16,51 @@ export class AppDnsService {
   }
 
   async onModuleInit() {
-    // Resolve service-a via Consul DNS
-    const serviceAHost = await this.resolveService('service-a.service.consul');
-    this.serviceAClient = ClientProxyFactory.create({
-      transport: Transport.TCP,
-      options: {
-        host: serviceAHost,
-        port: 3001,
-      },
-    });
+    try {
+      // Resolve service-a via Consul DNS
+      const serviceAHost = await this.resolveService('service-a.service.consul');
+      this.serviceAClient = ClientProxyFactory.create({
+        transport: Transport.TCP,
+        options: {
+          host: serviceAHost,
+          port: 3001,
+        },
+      });
 
-    // Resolve service-b via Consul DNS
-    const serviceBHost = await this.resolveService('service-b.service.consul');
-    this.serviceBClient = ClientProxyFactory.create({
-      transport: Transport.TCP,
-      options: {
-        host: serviceBHost,
-        port: 3002,
-      },
-    });
+      // Resolve service-b via Consul DNS
+      const serviceBHost = await this.resolveService('service-b.service.consul');
+      this.serviceBClient = ClientProxyFactory.create({
+        transport: Transport.TCP,
+        options: {
+          host: serviceBHost,
+          port: 3002,
+        },
+      });
 
-    console.log('✅ [Gateway AB - DNS] Using Consul DNS for service discovery');
+      console.log('✅ [Gateway AB - DNS] Using Consul DNS for service discovery');
+    } catch (error) {
+      console.warn('⚠️  [Gateway AB - DNS] Consul DNS resolution failed, using fallback');
+      console.warn('    Error:', error.message);
+      
+      // Fallback: use localhost
+      this.serviceAClient = ClientProxyFactory.create({
+        transport: Transport.TCP,
+        options: {
+          host: 'localhost',
+          port: 3001,
+        },
+      });
+
+      this.serviceBClient = ClientProxyFactory.create({
+        transport: Transport.TCP,
+        options: {
+          host: 'localhost',
+          port: 3002,
+        },
+      });
+      
+      console.log('✅ [Gateway AB - DNS] Using fallback localhost connections');
+    }
   }
 
   private async resolveService(serviceName: string): Promise<string> {

@@ -1,0 +1,126 @@
+[
+  {
+    "id": "microservices-realm",
+    "realm": "microservices-realm",
+    "enabled": true,
+    "displayName": "Microservices Realm",
+    "roles": {
+      "realm": [
+        {
+          "name": "admin",
+          "description": "Administrator role with full access"
+        },
+        {
+          "name": "user",
+          "description": "Standard user role"
+        }
+      ]
+    },
+    "clients": [
+      {
+        "clientId": "gateway-ab",
+        "name": "Gateway AB",
+        "enabled": true,
+        "protocol": "openid-connect",
+        "publicClient": false,
+        "secret": "gateway-ab-secret",
+        "redirectUris": [
+          "http://localhost:3300/*",
+          "http://localhost:8000/*"
+        ],
+        "webOrigins": [
+          "*"
+        ],
+        "baseUrl": "http://localhost:3300",
+        "adminUrl": "http://localhost:3300",
+        "directAccessGrantsEnabled": true,
+        "standardFlowEnabled": true,
+        "serviceAccountsEnabled": true,
+        "protocolMappers": [
+          {
+            "name": "audience-mapper",
+            "protocol": "openid-connect",
+            "protocolMapper": "oidc-audience-mapper",
+            "consentRequired": false,
+            "config": {
+              "included.client.audience": "gateway-ab",
+              "id.token.claim": "true",
+              "access.token.claim": "true"
+            }
+          }
+        ]
+      },
+      {
+        "clientId": "gateway-marketplace",
+        "name": "Gateway Marketplace",
+        "enabled": true,
+        "protocol": "openid-connect",
+        "publicClient": false,
+        "secret": "gateway-marketplace-secret",
+        "redirectUris": [
+          "http://localhost:3301/*",
+          "http://localhost:8000/*"
+        ],
+        "webOrigins": [
+          "*"
+        ],
+        "baseUrl": "http://localhost:3301",
+        "adminUrl": "http://localhost:3301",
+        "directAccessGrantsEnabled": true,
+        "standardFlowEnabled": true,
+        "serviceAccountsEnabled": true,
+        "protocolMappers": [
+          {
+            "name": "audience-mapper",
+            "protocol": "openid-connect",
+            "protocolMapper": "oidc-audience-mapper",
+            "consentRequired": false,
+            "config": {
+              "included.client.audience": "gateway-marketplace",
+              "id.token.claim": "true",
+              "access.token.claim": "true"
+            }
+          }
+        ]
+      }
+    ],
+    "users": [
+      {
+        "username": "alice",
+        "enabled": true,
+        "email": "alice@example.com",
+        "firstName": "Alice",
+        "lastName": "Dupont",
+        "emailVerified": true,
+        "credentials": [
+          {
+            "type": "password",
+            "value": "password",
+            "temporary": false
+          }
+        ],
+        "realmRoles": [
+          "admin"
+        ]
+      },
+      {
+        "username": "bob",
+        "enabled": true,
+        "email": "bob@example.com",
+        "firstName": "Bob",
+        "lastName": "Martin",
+        "emailVerified": true,
+        "credentials": [
+          {
+            "type": "password",
+            "value": "password",
+            "temporary": false
+          }
+        ],
+        "realmRoles": [
+          "user"
+        ]
+      }
+    ]
+  }
+]

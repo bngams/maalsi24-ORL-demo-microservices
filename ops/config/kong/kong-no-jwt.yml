@@ -1,0 +1,27 @@
+_format_version: "3.0"
+_transform: true
+
+# Kong Configuration - Option B (No JWT validation in Kong)
+# JWT validation is delegated to NestJS gateways
+# Kong acts as a simple reverse proxy
+
+services:
+  # Service 1 : Gateway AB (Domain AB)
+  - name: gateway-ab
+    url: http://host.docker.internal:3300
+    routes:
+      - name: gateway-ab-route
+        paths:
+          - /ab
+        strip_path: true
+    # No JWT plugin - validation in NestJS
+
+  # Service 2 : Gateway Marketplace (Domain Marketplace)
+  - name: gateway-marketplace
+    url: http://host.docker.internal:3301
+    routes:
+      - name: gateway-marketplace-route
+        paths:
+          - /marketplace
+        strip_path: true
+    # No JWT plugin - validation in NestJS

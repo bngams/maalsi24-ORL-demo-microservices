@@ -18,28 +18,46 @@ export class AppService {
   constructor(private consulDiscovery: ConsulDiscoveryService) {}
 
   async onModuleInit() {
-    setTimeout(() => {
-      console.log('⏳ [Gateway AB] Waiting for Consul to be ready...');
-    }, 1000);
-    // Découvrir service-a
-    const serviceAUrl = await this.consulDiscovery.getServiceUrl('service-a');
-    const [hostA, portA] = this.parseUrl(serviceAUrl);
+    try {
+      setTimeout(() => {
+        console.log('⏳ [Gateway AB] Waiting for Consul to be ready...');
+      }, 1000);
+      // Découvrir service-a
+      const serviceAUrl = await this.consulDiscovery.getServiceUrl('service-a');
+      const [hostA, portA] = this.parseUrl(serviceAUrl);
 
-    this.serviceAClient = ClientProxyFactory.create({
-      transport: Transport.TCP,
-      options: { host: hostA, port: portA },
-    });
+      this.serviceAClient = ClientProxyFactory.create({
+        transport: Transport.TCP,
+        options: { host: hostA, port: portA },
+      });
 
-    // Découvrir service-b
-    const serviceBUrl = await this.consulDiscovery.getServiceUrl('service-b');
-    const [hostB, portB] = this.parseUrl(serviceBUrl);
+      // Découvrir service-b
+      const serviceBUrl = await this.consulDiscovery.getServiceUrl('service-b');
+      const [hostB, portB] = this.parseUrl(serviceBUrl);
 
-    this.serviceBClient = ClientProxyFactory.create({
-      transport: Transport.TCP,
-      options: { host: hostB, port: portB },
-    });
+      this.serviceBClient = ClientProxyFactory.create({
+        transport: Transport.TCP,
+        options: { host: hostB, port: portB },
+      });
 
-    console.log('✅ [Gateway AB] Dynamic service discovery completed');
+      console.log('✅ [Gateway AB] Dynamic service discovery completed');
+    } catch (error) {
+      console.warn('⚠️  [Gateway AB] Consul service discovery failed, using fallback configuration');
+      console.warn('    Error:', error.message);
+      
+      // Fallback: use direct localhost connections
+      this.serviceAClient = ClientProxyFactory.create({
+        transport: Transport.TCP,
+        options: { host: 'localhost', port: 3001 },
+      });
+
+      this.serviceBClient = ClientProxyFactory.create({
+        transport: Transport.TCP,
+        options: { host: 'localhost', port: 3002 },
+      });
+      
+      console.log('✅ [Gateway AB] Using fallback service connections');
+    }
   }
 
   private parseUrl(url: string): [string, number] {
