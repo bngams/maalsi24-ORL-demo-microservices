@@ -3,8 +3,9 @@
 ## 🎯 Objectifs d'Apprentissage
 
 Dans ce tutoriel, vous allez :
-- Dockeriser chaque microservice (Gateway, Service A, B, Clients, Orders)
+- Dockeriser chaque microservice organisé par domaines (AB: gateway-ab, service-a, service-b / Marketplace: gateway-marketplace, service-clients, service-orders)
 - Orchestrer l'ensemble avec **Docker Compose**
+- Intégrer les services d'infrastructure : **Consul** (service discovery), **Kong** (API Gateway), **Keycloak** (authentification)
 - Intégrer les logs avec **Promtail** via des labels Docker
 - Migrer la stack vers **Kubernetes** avec **Minikube**
 - Comprendre les différences entre Docker Compose et Kubernetes
@@ -13,12 +14,23 @@ Dans ce tutoriel, vous allez :
 
 ## 📚 Contexte
 
-Actuellement, votre architecture microservices fonctionne en local :
-- **Gateway** (HTTP - Port 3000)
+Actuellement, votre architecture microservices est organisée par domaines :
+
+### Domaine AB
+- **Gateway AB** (HTTP - Port 3000) - Authentification JWT avec Keycloak
 - **Service A** (TCP - Port 3001)
 - **Service B** (TCP - Port 3002)
+
+### Domaine Marketplace
+- **Gateway Marketplace** (HTTP - Port 3010)
 - **Service Clients** (TCP + RabbitMQ - Port 3003)
 - **Service Orders** (RabbitMQ Consumer)
+
+### Infrastructure
+- **Consul** (Port 8500) - Service discovery et health checks
+- **Kong** (Ports 8000, 8001, 8002) - API Gateway avec base PostgreSQL
+- **Keycloak** (Port 8080) - Authentification et autorisation avec base PostgreSQL
+- **RabbitMQ** (Ports 5672, 15672) - Message broker
 
 Pour déployer cette architecture en environnement de production (ou de test), il est nécessaire de :
 1. **Conteneuriser** chaque service avec Docker
@@ -32,39 +44,72 @@ Pour déployer cette architecture en environnement de production (ou de test), i
 ```mermaid
 graph TB
     subgraph "Docker Compose / Kubernetes"
-        subgraph "Microservices"
-            Gateway["Gateway<br/>:3000"]
+        subgraph "Infrastructure Services"
+            Consul["Consul<br/>Service Discovery<br/>:8500"]
+            Kong["Kong API Gateway<br/>:8000, :8001, :8002"]
+            Keycloak["Keycloak<br/>Auth Server<br/>:8080"]
+            KongDB["PostgreSQL<br/>Kong DB<br/>:5433"]
+            KeycloakDB["PostgreSQL<br/>Keycloak DB<br/>:5432"]
+        end
+
+        subgraph "Domain AB"
+            GatewayAB["Gateway AB<br/>:3000"]
             ServiceA["Service A<br/>:3001"]
             ServiceB["Service B<br/>:3002"]
+        end
+
+        subgraph "Domain Marketplace"
+            GatewayMP["Gateway Marketplace<br/>:3010"]
             ServiceClients["Service Clients<br/>:3003"]
             ServiceOrders["Service Orders<br/>(Consumer)"]
         end
 
-        subgraph "Infrastructure"
+        subgraph "Message Broker"
             RabbitMQ["RabbitMQ<br/>:5672, :15672"]
+        end
+
+        subgraph "Observability"
             Loki["Loki<br/>:3100"]
             Promtail["Promtail"]
             Grafana["Grafana<br/>:3000"]
         end
 
-        Gateway -->|TCP| ServiceA
-        Gateway -->|TCP| ServiceB
-        Gateway -->|TCP| ServiceClients
+        Kong --> GatewayAB
+        Kong --> GatewayMP
+        
+        GatewayAB -->|JWT Auth| Keycloak
+        GatewayAB -->|TCP| ServiceA
+        GatewayAB -->|TCP| ServiceB
+        
+        GatewayMP -->|TCP| ServiceClients
         ServiceClients -->|Publish| RabbitMQ
         RabbitMQ -->|Consume| ServiceOrders
 
-        Gateway -.->|logs| Promtail
+        GatewayAB -.->|register| Consul
+        ServiceA -.->|register| Consul
+        ServiceB -.->|register| Consul
+        GatewayMP -.->|register| Consul
+        ServiceClients -.->|register| Consul
+
+        Kong -.->|service discovery| Consul
+        Keycloak --> KeycloakDB
+        Kong --> KongDB
+
+        GatewayAB -.->|logs| Promtail
+        GatewayMP -.->|logs| Promtail
         ServiceA -.->|logs| Promtail
         ServiceB -.->|logs| Promtail
         ServiceClients -.->|logs| Promtail
         ServiceOrders -.->|logs| Promtail
         RabbitMQ -.->|logs| Promtail
+        Kong -.->|logs| Promtail
+        Keycloak -.->|logs| Promtail
 
         Promtail -->|push| Loki
         Grafana -->|query| Loki
     end
 
-    Client([Client HTTP]) --> Gateway
+    Client([Client HTTP]) --> Kong
 ```
 
 ---
@@ -79,10 +124,10 @@ Avant de conteneuriser, il faut modifier le code de chaque service pour utiliser
 
 NestJS recommande d'utiliser `@nestjs/config` pour gérer les variables d'environnement de manière propre.
 
-**Pour chaque service (gateway, service-a, service-b, service-clients, service-orders) :**
+**Pour chaque service (gateway-ab, gateway-marketplace, service-a, service-b, service-clients, service-orders) :**
 
 ```bash
-cd gateway  # Ou service-a, service-b, etc.
+cd domains/ab/gateway-ab  # Ou autre service
 npm install @nestjs/config
 ```
 
@@ -94,10 +139,14 @@ npm install @nestjs/config
 
 À la racine de chaque service, créez un fichier `.env` pour les valeurs par défaut en développement.
 
-**`gateway/.env` :**
+**`domains/ab/gateway-ab/.env` :**
 ```bash
 # Gateway port
 PORT=3000
+
+# Consul configuration
+CONSUL_HOST=localhost
+CONSUL_PORT=8500
 
 # Service A connection
 SERVICE_A_HOST=localhost
@@ -107,35 +156,63 @@ SERVICE_A_PORT=3001
 SERVICE_B_HOST=____  # À compléter
 SERVICE_B_PORT=____
 
+# Keycloak configuration
+KEYCLOAK_URL=http://localhost:8080
+KEYCLOAK_REALM=microservices-realm
+KEYCLOAK_CLIENT_ID=gateway-ab-client
+KEYCLOAK_CLIENT_SECRET=____  # À compléter : obtenir depuis Keycloak
+```
+
+**`domains/marketplace/gateway-marketplace/.env` :**
+```bash
+# Gateway port
+PORT=____  # À compléter : quel port pour ce gateway ?
+
+# Consul configuration
+CONSUL_HOST=localhost
+CONSUL_PORT=____
+
 # Service Clients connection
-CLIENTS_SERVICE_HOST=____
+CLIENTS_SERVICE_HOST=____  # À compléter
 CLIENTS_SERVICE_PORT=____
 ```
 
-**`service-clients/.env` :**
+**`domains/marketplace/service-clients/.env` :**
 ```bash
 # Service port
 PORT=3003
 
+# Consul configuration
+CONSUL_HOST=____  # À compléter
+CONSUL_PORT=____
+
 # RabbitMQ connection
 RABBITMQ_URL=amqp://admin:admin@localhost:5672
-RABBITMQ_QUEUE=invoices
+RABBITMQ_QUEUE=____  # À compléter : nom de la queue
 ```
 
-**`service-orders/.env` :**
+**`domains/marketplace/service-orders/.env` :**
 ```bash
 # RabbitMQ connection
-RABBITMQ_URL=____  # À compléter
-RABBITMQ_QUEUE=____
+RABBITMQ_URL=____  # À compléter : même URL que service-clients
+RABBITMQ_QUEUE=____  # À compléter : même queue que service-clients
 ```
 
-**📝 À compléter pour service-a et service-b :** Quelles variables sont nécessaires ? (Indice : port d'écoute)
+**`domains/ab/service-a/.env` et `domains/ab/service-b/.env` :**
+```bash
+# Service port
+PORT=____  # À compléter : 3001 pour service-a, 3002 pour service-b
+
+# Consul configuration
+CONSUL_HOST=____
+CONSUL_PORT=____
+```
 
 ---
 
 #### 1.0.3 : Modifier le code pour utiliser les variables d'environnement
 
-##### **Gateway : `gateway/src/app.module.ts`**
+##### **Gateway AB : `domains/ab/gateway-ab/src/app.module.ts`**
 
 **Avant :**
 ```typescript
@@ -191,13 +268,22 @@ import { ConfigModule, ConfigService } from '@nestjs/config';  // Ajout
           transport: Transport.TCP,
           options: {
             host: ____,  // À compléter : utiliser configService.get()
-            port: ____,
+            port: ____,  // À compléter : quelle variable ?
           },
         }),
         inject: [____],  // À compléter
       },
-      // À compléter pour CLIENTS_SERVICE
     ]),
+  ],
+})
+export class AppModule {}
+```
+
+**📝 Points clés :**
+- Utilisez `ConfigModule.forRoot({ isGlobal: true })` pour charger les variables d'environnement
+- Utilisez `registerAsync` au lieu de `register` pour injecter `ConfigService`
+- `configService.get<string>('NOM_VARIABLE')` récupère la valeur
+- **Note :** Intégrez également le module Consul pour le service discovery (voir `shared/consul`)
   ],
 })
 export class AppModule {}
@@ -210,7 +296,7 @@ export class AppModule {}
 
 ---
 
-##### **Gateway : `gateway/src/main.ts`**
+##### **Gateway AB : `domains/ab/gateway-ab/src/main.ts`**
 
 Modifiez le port d'écoute pour utiliser la variable d'environnement :
 
@@ -231,13 +317,15 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT') || 3000;
   await app.listen(port);
-  console.log(`Gateway is running on port ${port}`);
+  console.log(`Gateway AB is running on port ${port}`);
 }
 ```
 
+**📝 Note :** Répétez la même logique pour `domains/marketplace/gateway-marketplace/src/main.ts` (avec port 3010 par défaut)
+
 ---
 
-##### **Service Clients : `service-clients/src/app.module.ts`**
+##### **Service Clients : `domains/marketplace/service-clients/src/app.module.ts`**
 
 **Avant :**
 ```typescript
@@ -270,14 +358,14 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
         useFactory: (configService: ConfigService) => ({
           transport: Transport.RMQ,
           options: {
-            urls: [configService.get<string>('____')],  // À compléter
+            urls: [configService.get<string>('____')],  // À compléter : quelle variable ?
             queue: configService.get<string>('____'),   // À compléter
             queueOptions: {
               durable: true,
             },
           },
         }),
-        inject: [ConfigService],
+        inject: [____],  // À compléter
       },
     ]),
   ],
@@ -286,7 +374,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 
 ---
 
-##### **Service Orders : `service-orders/src/main.ts`**
+##### **Service Orders : `domains/marketplace/service-orders/src/main.ts`**
 
 **Avant :**
 ```typescript
@@ -325,10 +413,11 @@ async function bootstrap() {
     },
   );
   await app.listen();
+  console.log('Service Orders is listening for messages');
 }
 ```
 
-**`service-orders/src/app.module.ts` :** N'oubliez pas d'importer `ConfigModule` !
+**`domains/marketplace/service-orders/src/app.module.ts` :** N'oubliez pas d'importer `ConfigModule` !
 
 ```typescript
 import { ConfigModule } from '@nestjs/config';
@@ -341,9 +430,9 @@ import { ConfigModule } from '@nestjs/config';
 
 ---
 
-##### **Services A et B : `service-a/src/main.ts` et `service-b/src/main.ts`**
+##### **Services A et B : `domains/ab/service-a/src/main.ts` et `domains/ab/service-b/src/main.ts`**
 
-**Indice :** Ces services écoutent sur un port TCP. Quelle variable d'environnement doit être utilisée ?
+Ces services écoutent sur un port TCP et doivent s'enregistrer auprès de Consul.
 
 **À compléter :**
 ```typescript
@@ -359,8 +448,14 @@ async function bootstrap() {
     },
   );
   await app.listen();
+  console.log(`Service is listening on port ${process.env.PORT}`);
 }
 ```
+
+**📝 Notes :**
+- N'oubliez pas d'importer `ConfigModule` dans `app.module.ts`
+- Intégrez le module Consul pour l'enregistrement du service (voir `shared/consul`)
+- Port par défaut : 3001 pour service-a, 3002 pour service-b
 
 ---
 
@@ -392,25 +487,31 @@ Pour chaque service NestJS, vous devez créer un `Dockerfile` à la racine du se
 
 **Arborescence attendue :**
 ```
-archi-cloud-native-microservices/
-├── gateway/
-│   ├── Dockerfile
-│   ├── package.json
-│   └── src/
-├── service-a/
-│   ├── Dockerfile
-│   ├── package.json
-│   └── src/
-├── service-b/
-│   ├── Dockerfile
-│   └── ...
-├── service-clients/
-│   ├── Dockerfile
-│   └── ...
-├── service-orders/
-│   ├── Dockerfile
-│   └── ...
-└── docker-compose.yml
+microservices-demo/
+├── domains/
+│   ├── ab/
+│   │   ├── gateway-ab/
+│   │   │   ├── Dockerfile
+│   │   │   ├── package.json
+│   │   │   └── src/
+│   │   ├── service-a/
+│   │   │   ├── Dockerfile
+│   │   │   ├── package.json
+│   │   │   └── src/
+│   │   └── service-b/
+│   │       ├── Dockerfile
+│   │       └── ...
+│   └── marketplace/
+│       ├── gateway-marketplace/
+│       │   ├── Dockerfile
+│       │   └── ...
+│       ├── service-clients/
+│       │   ├── Dockerfile (déjà existant)
+│       │   └── ...
+│       └── service-orders/
+│           ├── Dockerfile (déjà existant)
+│           └── ...
+└── compose.yml (déjà existant avec infra)
 ```
 
 **Exemple de Dockerfile (à adapter pour chaque service) :**
@@ -444,7 +545,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY package*.json ./
 
 # Exposer le port du service
-EXPOSE ____  # À compléter : 3000, 3001, 3002, 3003
+EXPOSE ____  # À compléter : 3000, 3001, 3002, 3003, 3010 selon le service
 
 # Démarrer l'application
 CMD ["node", "dist/main"]
@@ -452,62 +553,168 @@ CMD ["node", "dist/main"]
 
 **📝 Points d'attention :**
 - Pour chaque service, adaptez le port exposé (`EXPOSE`)
-- Vérifiez que le script `build` existe dans `package.json`
-- Le service Orders (RabbitMQ consumer) n'expose pas de port HTTP
+- Les Dockerfiles pour `service-clients` et `service-orders` existent déjà
+- Le service Orders (RabbitMQ consumer) n'expose pas de port HTTP mais doit quand même être conteneurisé
+- Si vous utilisez le monorepo avec des dépendances partagées (ex: `shared/consul`), vous devrez adapter le Dockerfile
 
 ---
 
 ### Étape 1.2 : Configurer Docker Compose
 
-Modifiez le fichier `docker-compose.yml` existant pour ajouter les services.
+Le fichier `compose.yml` existant contient déjà l'infrastructure (RabbitMQ, Consul, Kong, Keycloak, PostgreSQL).
+Vous devez maintenant ajouter les microservices.
 
-**Structure à ajouter :**
+**Structure à ajouter dans `compose.yml` :**
 
 ```yaml
 services:
-  # ========== MICROSERVICES ==========
+  # ========== Infrastructure (déjà présente) ==========
+  # rabbitmq, consul, kong, keycloak, postgres-kong-db, postgres-kc-db
 
-  gateway:
+  # ========== DOMAIN AB ==========
+
+  gateway-ab:
     build:
-      context: ./gateway
+      context: ./domains/ab/gateway-ab
       dockerfile: Dockerfile
-    container_name: gateway
+    container_name: gateway-ab
     labels:
       logging: "promtail"
       logging_jobname: "containerlogs"
     ports:
-      - "____:____"  # À compléter
+      - "3000:3000"
     environment:
-      - SERVICE_A_HOST=____  # Nom du service dans Docker Compose
-      - SERVICE_A_PORT=____
-      - SERVICE_B_HOST=____
-      - SERVICE_B_PORT=____
-      # ... autres variables d'environnement
+      - PORT=3000
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - SERVICE_A_HOST=service-a
+      - SERVICE_A_PORT=3001
+      - SERVICE_B_HOST=service-b
+      - SERVICE_B_PORT=3002
+      - KEYCLOAK_URL=http://keycloak:8080
+      - KEYCLOAK_REALM=microservices-realm
+      - KEYCLOAK_CLIENT_ID=gateway-ab-client
+      - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET}
     depends_on:
-      - ____  # Services dont dépend le gateway
+      - consul
+      - keycloak
+      - service-a
+      - service-b
     networks:
-      - ____  # Réseau à utiliser
+      - microservices
 
   service-a:
     build:
-      context: ./____  # À compléter
-    container_name: ____
+      context: ./domains/ab/service-a
+      dockerfile: Dockerfile
+    container_name: service-a
     labels:
-      ____: "____"  # Labels Promtail à ajouter
-      ____: "____"
+      logging: "promtail"
+      logging_jobname: "containerlogs"
     expose:
-      - "____"  # Port interne (pas besoin de mapper sur l'hôte)
+      - "3001"
+    environment:
+      - PORT=3001
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+    depends_on:
+      - consul
+    networks:
+      - microservices
+
+  service-b:
+    build:
+      context: ./domains/ab/service-b
+      dockerfile: Dockerfile
+    container_name: service-b
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    expose:
+      - "____"  # À compléter : port du service-b
+    environment:
+      - PORT=____  # À compléter
+      - CONSUL_HOST=____
+      - CONSUL_PORT=____
+    depends_on:
+      - ____  # À compléter : de quel service dépend-il ?
+    networks:
+      - microservices
+
+  # ========== DOMAIN MARKETPLACE ==========
+
+  gateway-marketplace:
+    build:
+      context: ./____/____/____  # À compléter : chemin vers gateway-marketplace
+      dockerfile: Dockerfile
+    container_name: ____  # À compléter
+    labels:
+      ____: "____"  # À compléter : labels Promtail
+      ____: "____"
+    ports:
+      - "____:____"  # À compléter : port mapping
+    environment:
+      - PORT=____
+      - CONSUL_HOST=____
+      - CONSUL_PORT=____
+      - CLIENTS_SERVICE_HOST=____  # À compléter : nom du service
+      - CLIENTS_SERVICE_PORT=____
+    depends_on:
+      - ____  # À compléter
+      - ____
     networks:
       - ____
 
-  # ... Compléter pour service-b, service-clients, service-orders
+  service-clients:
+    build:
+      context: ./domains/marketplace/service-clients
+      dockerfile: Dockerfile
+    container_name: service-clients
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    expose:
+      - "____"  # À compléter : port du service
+    environment:
+      - PORT=____
+      - CONSUL_HOST=____
+      - CONSUL_PORT=____
+      - RABBITMQ_URL=____  # À compléter : URL de connexion à RabbitMQ
+      - RABBITMQ_QUEUE=____  # À compléter : nom de la queue
+    depends_on:
+      - ____  # À compléter
+      - ____
+    networks:
+      - microservices
+
+  service-orders:
+    build:
+      context: ./____/____/____  # À compléter
+      dockerfile: ____
+    container_name: ____
+    labels:
+      ____: "____"  # À compléter
+      ____: "____"
+    environment:
+      - RABBITMQ_URL=____  # À compléter : même valeur que service-clients
+      - RABBITMQ_QUEUE=____  # À compléter : même queue
+    depends_on:
+      - ____  # À compléter : de quel service dépend-il ?
+    networks:
+      - ____
+
+networks:
+  microservices:
+    driver: bridge
+  # obs: # Réseau pour observabilité (Loki, Promtail, Grafana) - à ajouter si nécessaire
 ```
 
 **📝 Points clés :**
 - Utilisez `depends_on` pour gérer l'ordre de démarrage
 - Les labels `logging: "promtail"` et `logging_jobname: "containerlogs"` sont **obligatoires** pour tous les services
 - Utilisez `expose` pour les services internes (non accessibles depuis l'extérieur)
-- Utilisez `ports` uniquement pour le Gateway et les services d'infra (RabbitMQ, Grafana, etc.)
+- Utilisez `ports` uniquement pour les gateways et les services d'infra
+- Dans Docker Compose, utilisez le **nom du service** comme hostname (ex: `rabbitmq`, `consul`, `service-a`)
 
 ---
 
@@ -515,7 +722,7 @@ services:
 
 **Dans chaque service NestJS**, vérifier que la configuration utilise les variables d'environnement (pour recevoir les valeurs proposées par compose)
 
-**Exemple pour `gateway/src/main.ts` ou `app.module.ts` :**
+**Exemple pour `domains/ab/gateway-ab/src/main.ts` ou `app.module.ts` :**
 
 ```typescript
 // Avant (hardcodé) :
@@ -538,33 +745,38 @@ urls: ['amqp://admin:admin@localhost:5672']
 // Après :
 urls: [process.env.RABBITMQ_URL || 'amqp://admin:admin@localhost:5672']
 // ou
-urls: [configService.get<string>('RABBITMQ_URL')],  // À compléter
+urls: [configService.get<string>('RABBITMQ_URL')],
 ```
 
-**Dans `docker-compose.yml`, définissez ces variables :**
+**Dans `compose.yml`, les variables sont déjà définies :**
 ```yaml
 environment:
   - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672
+  - CONSUL_HOST=consul
 ```
 
-**💡 Astuce :** Dans Docker Compose, utilisez le **nom du service** comme hostname (ex: `rabbitmq`, `service-a`).
+**💡 Astuce :** Dans Docker Compose, utilisez le **nom du service** comme hostname (ex: `rabbitmq`, `consul`, `service-a`).
 
 ---
 
 ### Étape 1.4 : Configuration du réseau
 
-**Ajoutez ou modifiez la section `networks` dans `docker-compose.yml` :**
+**Ajoutez ou modifiez la section `networks` dans `compose.yml` :**
 
 ```yaml
 networks:
-  obs:  # Réseau existant pour observabilité
-  microservices:  # Nouveau réseau pour les microservices
+  microservices:
+    driver: bridge
+  obs:  # Réseau pour observabilité (Loki, Promtail, Grafana)
+    driver: bridge
 ```
 
 **Affectez les services aux réseaux appropriés :**
-- **Gateway, Services A/B/Clients/Orders** : réseau `microservices`
-- **RabbitMQ** : réseaux `microservices` + `obs` (pour être accessible par les services et Promtail)
+- **Gateways, Services (A/B/Clients/Orders)** : réseau `microservices`
+- **RabbitMQ, Consul, Kong, Keycloak** : réseau `microservices` (+ `obs` pour RabbitMQ si observabilité activée)
 - **Loki, Promtail, Grafana** : réseau `obs`
+
+**📝 Note :** Les services d'infrastructure (Consul, Kong, Keycloak) sont déjà configurés dans le `compose.yml` existant.
 
 ---
 
@@ -574,37 +786,63 @@ networks:
 
 ```bash
 # Build et démarrage
-docker-compose up --build -d
+docker compose up --build -d
 
 # Vérifier les logs
-docker-compose logs -f gateway
-docker-compose logs -f service-orders
+docker compose logs -f gateway-ab
+docker compose logs -f service-orders
 
-# Tester l'API
+# Tester l'API via Kong (si configuré)
+curl http://localhost:8000/ab/service-a
+
+# Tester directement les gateways
 curl http://localhost:3000/service-a
-curl -X POST http://localhost:3000/clients/123/generate-invoice
+curl http://localhost:3010/clients
+
+# Tester avec JWT (Gateway AB + Keycloak)
+# 1. Obtenir un token depuis Keycloak
+# 2. Utiliser le token pour accéder aux routes protégées
+
+# Vérifier Consul
+open http://localhost:8500
+
+# Vérifier Kong Admin
+open http://localhost:8001
+
+# Vérifier Keycloak
+open http://localhost:8080
 ```
 
 **Vérifications attendues :**
 - ✅ Tous les conteneurs démarrent sans erreur
-- ✅ Le Gateway peut communiquer avec les services TCP
+- ✅ Les services s'enregistrent auprès de Consul
+- ✅ Le Gateway AB peut communiquer avec les services TCP (A et B)
+- ✅ Le Gateway Marketplace peut communiquer avec le Service Clients
 - ✅ RabbitMQ reçoit et traite les messages
-- ✅ Les logs apparaissent dans **Grafana** (http://localhost:3000)
+- ✅ Kong route correctement les requêtes vers les gateways
+- ✅ L'authentification Keycloak fonctionne sur Gateway AB
+- ✅ Les logs apparaissent dans **Grafana** (si observabilité configurée)
 - ✅ Tous les conteneurs ont les labels Promtail
 
 **Commandes utiles :**
 ```bash
 # Afficher les conteneurs en cours
-docker-compose ps
+docker compose ps
 
 # Inspecter les labels d'un conteneur
-docker inspect gateway | grep -A 5 Labels
+docker inspect gateway-ab | grep -A 5 Labels
 
 # Redémarrer un service spécifique
-docker-compose restart service-a
+docker compose restart service-a
+
+# Voir les logs d'un service
+docker compose logs -f gateway-ab
 
 # Arrêter tous les services
-docker-compose down
+docker compose down
+
+# Supprimer les volumes (attention: données perdues)
+docker compose down -v
 ```
 
 ---
@@ -631,22 +869,43 @@ kubectl cluster-info
 ```
 ops/k8s/
 ├── namespace.yaml
-├── rabbitmq/
-│   ├── deployment.yaml
-│   ├── service.yaml
-│   └── configmap.yaml
-├── gateway/
-│   ├── deployment.yaml
-│   └── service.yaml
-├── service-a/
-│   ├── deployment.yaml
-│   └── service.yaml
-├── service-b/
-│   ├── ...
-├── service-clients/
-│   ├── ...
-├── service-orders/
-│   ├── deployment.yaml  # Pas de service.yaml (consumer)
+├── infrastructure/
+│   ├── rabbitmq/
+│   │   ├── deployment.yaml
+│   │   ├── service.yaml
+│   │   └── configmap.yaml
+│   ├── consul/
+│   │   ├── deployment.yaml
+│   │   └── service.yaml
+│   ├── kong/
+│   │   ├── postgres-deployment.yaml
+│   │   ├── postgres-service.yaml
+│   │   ├── kong-deployment.yaml
+│   │   └── kong-service.yaml
+│   └── keycloak/
+│       ├── postgres-deployment.yaml
+│       ├── postgres-service.yaml
+│       ├── keycloak-deployment.yaml
+│       └── keycloak-service.yaml
+├── domain-ab/
+│   ├── gateway-ab/
+│   │   ├── deployment.yaml
+│   │   └── service.yaml
+│   ├── service-a/
+│   │   ├── deployment.yaml
+│   │   └── service.yaml
+│   └── service-b/
+│       ├── deployment.yaml
+│       └── service.yaml
+├── domain-marketplace/
+│   ├── gateway-marketplace/
+│   │   ├── deployment.yaml
+│   │   └── service.yaml
+│   ├── service-clients/
+│   │   ├── deployment.yaml
+│   │   └── service.yaml
+│   └── service-orders/
+│       └── deployment.yaml  # Pas de service.yaml (consumer)
 └── observability/
     ├── loki-deployment.yaml
     ├── promtail-daemonset.yaml
@@ -675,42 +934,64 @@ kubectl apply -f k8s/namespace.yaml
 
 ---
 
-### Étape 2.4 : Exemple de Deployment (Gateway)
+### Étape 2.4 : Exemple de Deployment (Gateway AB)
 
-**`k8s/gateway/deployment.yaml` :**
+**`ops/k8s/domain-ab/gateway-ab/deployment.yaml` :**
 
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: gateway
+  name: gateway-ab
   namespace: microservices
   labels:
-    app: gateway
+    app: gateway-ab
+    domain: ab
 spec:
-  replicas: ____  # À compléter : nombre de réplicas
+  replicas: ____  # À compléter : nombre de réplicas souhaité
   selector:
     matchLabels:
-      app: gateway
+      app: gateway-ab
   template:
     metadata:
       labels:
-        app: gateway
+        app: gateway-ab
+        domain: ab
         logging: "promtail"  # Label pour Promtail
         logging_jobname: "containerlogs"
     spec:
       containers:
-      - name: gateway
-        image: ____/gateway:latest  # À compléter : votre registry
+      - name: gateway-ab
+        image: ____:latest  # À compléter : nom de l'image
         imagePullPolicy: IfNotPresent
         ports:
-        - containerPort: ____  # Port du conteneur
+        - containerPort: ____  # À compléter : port du conteneur
         env:
+        - name: PORT
+          value: "____"  # À compléter
+        - name: CONSUL_HOST
+          value: "____"  # À compléter : nom du service Consul
+        - name: CONSUL_PORT
+          value: "____"
         - name: SERVICE_A_HOST
-          value: "____"  # Nom du Service Kubernetes
+          value: "____"  # À compléter : nom du Service Kubernetes
         - name: SERVICE_A_PORT
           value: "____"
-        # ... Autres variables d'environnement
+        - name: SERVICE_B_HOST
+          value: "____"  # À compléter
+        - name: SERVICE_B_PORT
+          value: "____"
+        - name: KEYCLOAK_URL
+          value: "http://keycloak:8080"
+        - name: KEYCLOAK_REALM
+          value: "microservices-realm"
+        - name: KEYCLOAK_CLIENT_ID
+          value: "gateway-ab-client"
+        - name: KEYCLOAK_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: keycloak-secrets
+              key: client-secret
         resources:
           requests:
             memory: "128Mi"
@@ -718,34 +999,57 @@ spec:
           limits:
             memory: "256Mi"
             cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+```
+
+**📝 Note :** Créez un Secret Kubernetes pour stocker les secrets Keycloak :
+```bash
+kubectl create secret generic keycloak-secrets \
+  --from-literal=client-secret=your-secret-here \
+  -n microservices
 ```
 
 ---
 
-### Étape 2.5 : Exemple de Service (Gateway)
+### Étape 2.5 : Exemple de Service (Gateway AB)
 
-**`k8s/gateway/service.yaml` :**
+**`ops/k8s/domain-ab/gateway-ab/service.yaml` :**
 
 ```yaml
 apiVersion: v1
 kind: Service
 metadata:
-  name: gateway
+  name: gateway-ab
   namespace: microservices
 spec:
-  type: ____  # LoadBalancer ou NodePort pour exposer à l'extérieur
+  type: ____  # À compléter : NodePort ou LoadBalancer ?
   selector:
-    app: gateway
+    app: ____  # À compléter : label du pod
   ports:
   - protocol: TCP
-    port: ____      # Port du service
-    targetPort: ____ # Port du conteneur
+    port: ____      # À compléter : port du service
+    targetPort: ____ # À compléter : port du conteneur
+    nodePort: ____  # À compléter : port externe (30000-32767)
 ```
 
 **Types de Service à utiliser :**
-- **Gateway** : `LoadBalancer` ou `NodePort` (accessible de l'extérieur)
+- **Gateways (gateway-ab, gateway-marketplace)** : `NodePort` ou `LoadBalancer` (accessible de l'extérieur)
 - **Services A/B/Clients** : `ClusterIP` (interne uniquement)
 - **RabbitMQ** : `ClusterIP` (+ `NodePort` pour le management UI si besoin)
+- **Consul** : `ClusterIP` (+ `NodePort` pour l'UI web)
+- **Kong** : `NodePort` ou `LoadBalancer` pour le proxy (port 8000)
+- **Keycloak** : `ClusterIP` ou `NodePort` selon besoin d'accès externe
 
 ---
 
@@ -757,15 +1061,17 @@ spec:
 eval $(minikube docker-env)
 ```
 
-**Build des images :**
+**Build des images (depuis la racine du projet) :**
 ```bash
-# Gateway
-docker build -t gateway:latest ./gateway
+# Domain AB
+docker build -t gateway-ab:latest ./domains/ab/gateway-ab
+docker build -t service-a:latest ./domains/ab/service-a
+docker build -t service-b:latest ./domains/ab/service-b
 
-# Service A
-docker build -t service-a:latest ./service-a
-
-# ... Répéter pour chaque service
+# Domain Marketplace
+docker build -t gateway-marketplace:latest ./domains/marketplace/gateway-marketplace
+docker build -t service-clients:latest ./domains/marketplace/service-clients
+docker build -t service-orders:latest ./domains/marketplace/service-orders
 ```
 
 **💡 Note :** Avec Minikube, pas besoin de push vers un registry externe si vous utilisez `imagePullPolicy: IfNotPresent`.
@@ -778,20 +1084,35 @@ docker build -t service-a:latest ./service-a
 
 ```bash
 # 1. Namespace
-kubectl apply -f k8s/namespace.yaml
+kubectl apply -f ops/k8s/namespace.yaml
 
-# 2. Infrastructure (RabbitMQ, Loki, Promtail)
-kubectl apply -f k8s/rabbitmq/
-kubectl apply -f k8s/observability/
+# 2. Secrets (pour Keycloak, etc.)
+kubectl create secret generic keycloak-secrets \
+  --from-literal=client-secret=your-secret-here \
+  -n microservices
 
-# 3. Services métier
-kubectl apply -f k8s/service-a/
-kubectl apply -f k8s/service-b/
-kubectl apply -f k8s/service-clients/
-kubectl apply -f k8s/service-orders/
+# 3. Infrastructure (Consul, RabbitMQ, PostgreSQL, Kong, Keycloak)
+kubectl apply -f ops/k8s/infrastructure/consul/
+kubectl apply -f ops/k8s/infrastructure/rabbitmq/
+kubectl apply -f ops/k8s/infrastructure/kong/
+kubectl apply -f ops/k8s/infrastructure/keycloak/
 
-# 4. Gateway (en dernier, car dépend des autres)
-kubectl apply -f k8s/gateway/
+# Attendre que l'infrastructure soit prête
+kubectl wait --for=condition=ready pod -l app=consul -n microservices --timeout=120s
+kubectl wait --for=condition=ready pod -l app=rabbitmq -n microservices --timeout=120s
+
+# 4. Domain AB
+kubectl apply -f ops/k8s/domain-ab/service-a/
+kubectl apply -f ops/k8s/domain-ab/service-b/
+kubectl apply -f ops/k8s/domain-ab/gateway-ab/
+
+# 5. Domain Marketplace
+kubectl apply -f ops/k8s/domain-marketplace/service-clients/
+kubectl apply -f ops/k8s/domain-marketplace/service-orders/
+kubectl apply -f ops/k8s/domain-marketplace/gateway-marketplace/
+
+# 6. Observabilité (optionnel)
+kubectl apply -f ops/k8s/observability/
 ```
 
 ---
@@ -808,20 +1129,49 @@ kubectl get pods -n microservices
 kubectl get svc -n microservices
 
 # Logs d'un pod
-kubectl logs -f deployment/gateway -n microservices
+kubectl logs -f deployment/gateway-ab -n microservices
 
 # Décrire un pod (pour débugger)
 kubectl describe pod <pod-name> -n microservices
 
-# Accéder au Gateway (si NodePort)
-minikube service gateway -n microservices
+# Accéder aux gateways (si NodePort)
+minikube service gateway-ab -n microservices
+minikube service gateway-marketplace -n microservices
+
+# Accéder à Kong
+minikube service kong -n microservices
+
+# Accéder à Consul UI
+minikube service consul -n microservices
+
+# Port-forward pour accéder à Keycloak
+kubectl port-forward svc/keycloak 8080:8080 -n microservices
 ```
 
 **Vérifications attendues :**
 - ✅ Tous les pods sont en état `Running`
 - ✅ Les services sont créés avec les bonnes ClusterIP
-- ✅ Le Gateway est accessible via `minikube service`
+- ✅ Les services s'enregistrent dans Consul
+- ✅ Les gateways sont accessibles via `minikube service`
+- ✅ Kong route correctement vers les gateways
+- ✅ L'authentification Keycloak fonctionne
+- ✅ RabbitMQ traite les messages correctement
 - ✅ Les logs sont collectés par Promtail (vérifier dans Grafana)
+
+**Commandes de debug utiles :**
+```bash
+# Voir les événements
+kubectl get events -n microservices --sort-by='.lastTimestamp'
+
+# Vérifier les variables d'environnement d'un pod
+kubectl exec -it <pod-name> -n microservices -- env
+
+# Shell interactif dans un pod
+kubectl exec -it <pod-name> -n microservices -- sh
+
+# Vérifier la santé de Consul
+kubectl exec -it <consul-pod> -n microservices -- consul members
+```
 
 ---
 
@@ -910,18 +1260,22 @@ scrape_configs:
 ## 🎓 Résumé
 
 ### Partie 1 : Docker Compose
-- ✅ Créer un `Dockerfile` pour chaque service
-- ✅ Configurer `docker-compose.yml` avec les dépendances
+- ✅ Créer un `Dockerfile` pour chaque service (certains existent déjà dans marketplace)
+- ✅ Configurer `compose.yml` avec les microservices et leurs dépendances
+- ✅ Intégrer les services d'infrastructure : Consul, Kong, Keycloak, RabbitMQ
 - ✅ Ajouter les labels Promtail sur tous les conteneurs
 - ✅ Utiliser les variables d'environnement pour la configuration
-- ✅ Tester l'ensemble de la stack avec `docker-compose up`
+- ✅ Tester l'ensemble de la stack avec `docker compose up`
 
 ### Partie 2 : Kubernetes
-- ✅ Créer les manifests (Deployment, Service) pour chaque composant
+- ✅ Créer les manifests (Deployment, Service) pour chaque composant par domaine
+- ✅ Déployer l'infrastructure (Consul, Kong, Keycloak, RabbitMQ)
 - ✅ Utiliser les labels pour Promtail (dans `template.metadata.labels`)
 - ✅ Déployer sur Minikube avec `kubectl apply`
 - ✅ Configurer Promtail en DaemonSet pour collecter les logs
 - ✅ Comprendre les différences entre Docker Compose et Kubernetes
+- ✅ Intégrer le service discovery avec Consul
+- ✅ Sécuriser avec Keycloak (JWT) sur Gateway AB
 
 ---
 
@@ -930,24 +1284,43 @@ scrape_configs:
 ### Extensions possibles :
 
 1. **Ingress Controller**
-   - Exposer le Gateway via un Ingress (au lieu de NodePort/LoadBalancer)
+   - Exposer les gateways via un Ingress (au lieu de NodePort/LoadBalancer)
    - Configurer des routes basées sur le path
+   - Intégrer avec Kong comme Ingress Controller
 
 2. **ConfigMaps et Secrets**
    - Externaliser les configurations dans des ConfigMaps
-   - Stocker les credentials RabbitMQ dans des Secrets
+   - Stocker les credentials (RabbitMQ, Keycloak, PostgreSQL) dans des Secrets
+   - Utiliser des Sealed Secrets pour sécuriser les secrets dans Git
 
 3. **Horizontal Pod Autoscaling (HPA)**
    - Scaler automatiquement les services en fonction du CPU/Mémoire
+   - Configurer des métriques personnalisées
 
 4. **Volumes Persistants**
-   - Utiliser des PersistentVolumeClaims pour RabbitMQ et Loki
+   - Utiliser des PersistentVolumeClaims pour RabbitMQ, PostgreSQL et Consul
+   - Configurer des StorageClasses
 
 5. **Helm Charts**
    - Packager l'application avec Helm pour faciliter le déploiement
+   - Créer des charts par domaine (ab, marketplace, infrastructure)
 
-6. **Health Checks**
-   - Implémenter `livenessProbe` et `readinessProbe` dans les Deployments
+6. **Health Checks et Probes**
+   - Implémenter `livenessProbe` et `readinessProbe` dans tous les Deployments
+   - Créer des endpoints `/health` dans les services NestJS
+
+7. **Service Mesh (Istio/Linkerd)**
+   - Ajouter un service mesh pour gérer le trafic, la sécurité et l'observabilité
+   - Implémenter des politiques de retry, circuit breaker, etc.
+
+8. **GitOps avec ArgoCD**
+   - Automatiser les déploiements avec ArgoCD
+   - Synchroniser l'état du cluster avec Git
+
+9. **Multi-cluster et High Availability**
+   - Déployer Consul en mode cluster
+   - Configurer Kong en mode HA avec plusieurs instances
+   - Répliquer les bases PostgreSQL
 
 ---
 
