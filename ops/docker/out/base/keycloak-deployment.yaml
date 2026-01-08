@@ -1,0 +1,73 @@
+#! keycloak-deployment.yaml
+# Generated code, do not edit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: keycloak
+    namespace: docker
+    labels:
+        com.docker.compose.project: docker
+        com.docker.compose.service: keycloak
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            com.docker.compose.project: docker
+            com.docker.compose.service: keycloak
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                com.docker.compose.project: docker
+                com.docker.compose.service: keycloak
+                com.docker.compose.network.microservices-network: "true"
+        spec:
+            containers:
+                - name: keycloak
+                  image: quay.io/keycloak/keycloak:latest
+                  imagePullPolicy: IfNotPresent
+                  args:
+                    - start-dev
+                    - --import-realm
+                  env:
+                    - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+                      value: "admin"
+                    - name: KC_BOOTSTRAP_ADMIN_USERNAME
+                      value: "admin"
+                    - name: KC_DB
+                      value: "postgres"
+                    - name: KC_DB_PASSWORD
+                      value: "keycloak"
+                    - name: KC_DB_URL
+                      value: "jdbc:postgresql://postgres-kc-db:5432/keycloak"
+                    - name: KC_DB_USERNAME
+                      value: "keycloak"
+                    - name: KC_HOSTNAME_STRICT
+                      value: "false"
+                    - name: KC_HOSTNAME_STRICT_HTTPS
+                      value: "false"
+                    - name: KC_HTTP_ENABLED
+                      value: "true"
+                  livenessProbe:
+                    exec:
+                        command: ['curl -f http://localhost:8080/health/ready']
+                    periodSeconds: 30
+                    timeoutSeconds: 10
+                    failureThreshold: 5
+                  ports:
+                    - name: keycloak-9000
+                      containerPort: 9000
+                    - name: keycloak-8080
+                      containerPort: 8080
+                    - name: keycloak-8443
+                      containerPort: 8443
+                  volumeMounts:
+                    - name: opt-keycloak-data-import-realm-export-json
+                      mountPath: /opt/keycloak/data/import/realm-export.json
+                      readOnly: true
+            volumes:
+                - name: opt-keycloak-data-import-realm-export-json
+                  hostPath:
+                    path: /Users/bngams/Courses/cesi/maalsi-24-ORL/microservices-demo/ops/config/keycloak/realm-export.json
+                  readOnly: true

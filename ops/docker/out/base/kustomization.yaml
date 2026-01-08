@@ -1,0 +1,32 @@
+#! kustomization.yaml
+# Generated code, do not edit
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+    - 0-docker-namespace.yaml
+    - consul-consul_data-persistentVolumeClaim.yaml
+    - consul-deployment.yaml
+    - consul-expose.yaml
+    - consul-service.yaml
+    - grafana-deployment.yaml
+    - grafana-expose.yaml
+    - grafana-service.yaml
+    - keycloak-deployment.yaml
+    - keycloak-expose.yaml
+    - keycloak-service.yaml
+    - kong-deployment.yaml
+    - kong-expose.yaml
+    - kong-service.yaml
+    - microservices-network-network-policy.yaml
+    - postgres-kc-db-deployment.yaml
+    - postgres-kc-db-expose.yaml
+    - postgres-kc-db-postgres_data_kc-persistentVolumeClaim.yaml
+    - postgres-kc-db-service.yaml
+    - postgres-kong-db-deployment.yaml
+    - postgres-kong-db-expose.yaml
+    - postgres-kong-db-postgres_data_kong-persistentVolumeClaim.yaml
+    - postgres-kong-db-service.yaml
+    - rabbitmq-deployment.yaml
+    - rabbitmq-expose.yaml
+    - rabbitmq-rabbitmq_data-persistentVolumeClaim.yaml
+    - rabbitmq-service.yaml

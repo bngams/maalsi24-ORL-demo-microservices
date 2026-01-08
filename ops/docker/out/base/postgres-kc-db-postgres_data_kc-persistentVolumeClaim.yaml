@@ -1,0 +1,18 @@
+#! postgres-kc-db-postgres_data_kc-persistentVolumeClaim.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: postgres-kc-db-postgres-data-kc
+    namespace: docker
+    labels:
+        com.docker.compose.service: postgres-kc-db
+        com.docker.compose.volume: postgres_data_kc
+spec:
+    accessModes:
+        # TODO would need to check which services use this volume
+        - ReadWriteOnce
+    volumeMode: Filesystem
+    resources:
+        requests:
+            storage: 100Mi

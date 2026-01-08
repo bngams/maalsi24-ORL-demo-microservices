@@ -1,0 +1,29 @@
+#! kong-service.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Service
+metadata:
+    name: kong-published
+    namespace: docker
+    labels:
+        com.docker.compose.project: docker
+        com.docker.compose.service: kong
+spec:
+    selector:
+        com.docker.compose.project: docker
+        com.docker.compose.service: kong
+    ports:
+        - name: kong-8000
+          port: 8000
+          protocol: TCP
+          targetPort: kong-8000
+        - name: kong-8001
+          port: 8001
+          protocol: TCP
+          targetPort: kong-8001
+        - name: kong-8002
+          port: 8002
+          protocol: TCP
+          targetPort: kong-8002
+
+# check if there is at least one published port

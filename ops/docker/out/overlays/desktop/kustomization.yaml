@@ -1,0 +1,18 @@
+#! kustomization.yaml
+# Generated code, do not edit
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+    - ../../base
+patches:
+    - path: consul-consul_data-persistentVolumeClaim.yaml
+    - path: consul-service.yaml
+    - path: grafana-service.yaml
+    - path: keycloak-service.yaml
+    - path: kong-service.yaml
+    - path: postgres-kc-db-postgres_data_kc-persistentVolumeClaim.yaml
+    - path: postgres-kc-db-service.yaml
+    - path: postgres-kong-db-postgres_data_kong-persistentVolumeClaim.yaml
+    - path: postgres-kong-db-service.yaml
+    - path: rabbitmq-rabbitmq_data-persistentVolumeClaim.yaml
+    - path: rabbitmq-service.yaml

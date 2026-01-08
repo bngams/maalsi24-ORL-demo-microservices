@@ -1,0 +1,30 @@
+#! kong-expose.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Service
+metadata:
+    name: kong
+    namespace: docker
+    labels:
+        com.docker.compose.project: docker
+        com.docker.compose.service: kong
+spec:
+    selector:
+        com.docker.compose.project: docker
+        com.docker.compose.service: kong
+    ports:
+        - name: kong-8000
+          port: 8000
+          targetPort: kong-8000
+        - name: kong-8001
+          port: 8001
+          targetPort: kong-8001
+        - name: kong-8443
+          port: 8443
+          targetPort: kong-8443
+        - name: kong-8444
+          port: 8444
+          targetPort: kong-8444
+        - name: kong-8002
+          port: 8002
+          targetPort: kong-8002

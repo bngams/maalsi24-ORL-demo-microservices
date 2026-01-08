@@ -1,0 +1,21 @@
+#! postgres-kong-db-service.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Service
+metadata:
+    name: postgres-kong-db-published
+    namespace: docker
+    labels:
+        com.docker.compose.project: docker
+        com.docker.compose.service: postgres-kong-db
+spec:
+    selector:
+        com.docker.compose.project: docker
+        com.docker.compose.service: postgres-kong-db
+    ports:
+        - name: postgres-k-5433
+          port: 5433
+          protocol: TCP
+          targetPort: postgres-k-5432
+
+# check if there is at least one published port

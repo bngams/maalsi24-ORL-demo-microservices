@@ -1,0 +1,9 @@
+#! postgres-kc-db-postgres_data_kc-persistentVolumeClaim.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: postgres-kc-db-postgres-data-kc
+    namespace: docker
+spec:
+    storageClassName: "hostpath" # see docker/desktop-storage-provisioner

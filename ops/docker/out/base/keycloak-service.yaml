@@ -1,0 +1,21 @@
+#! keycloak-service.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Service
+metadata:
+    name: keycloak-published
+    namespace: docker
+    labels:
+        com.docker.compose.project: docker
+        com.docker.compose.service: keycloak
+spec:
+    selector:
+        com.docker.compose.project: docker
+        com.docker.compose.service: keycloak
+    ports:
+        - name: keycloak-8080
+          port: 8080
+          protocol: TCP
+          targetPort: keycloak-8080
+
+# check if there is at least one published port

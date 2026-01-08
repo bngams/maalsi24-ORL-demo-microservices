@@ -1,0 +1,23 @@
+#! rabbitmq-service.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Service
+metadata:
+    name: rabbitmq-published
+    namespace: docker
+    labels:
+        com.docker.compose.project: docker
+        com.docker.compose.service: rabbitmq
+spec:
+    selector:
+        com.docker.compose.project: docker
+        com.docker.compose.service: rabbitmq
+    ports:
+        - name: rabbitmq-5672
+          port: 5672
+          protocol: TCP
+          targetPort: rabbitmq-5672
+        - name: rabbitmq-15672
+          port: 15672
+          protocol: TCP
+          targetPort: rabbitmq-15672

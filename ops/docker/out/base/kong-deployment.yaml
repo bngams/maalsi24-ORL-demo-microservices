@@ -1,0 +1,74 @@
+#! kong-deployment.yaml
+# Generated code, do not edit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: kong
+    namespace: docker
+    labels:
+        com.docker.compose.project: docker
+        com.docker.compose.service: kong
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            com.docker.compose.project: docker
+            com.docker.compose.service: kong
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                com.docker.compose.project: docker
+                com.docker.compose.service: kong
+                com.docker.compose.network.microservices-network: "true"
+        spec:
+            containers:
+                - name: kong
+                  image: kong:latest
+                  imagePullPolicy: IfNotPresent
+                  env:
+                    - name: KONG_ADMIN_GUI_LISTEN
+                      value: "0.0.0.0:8002"
+                    - name: KONG_ADMIN_LISTEN
+                      value: "0.0.0.0:8001"
+                    - name: KONG_DATABASE
+                      value: "postgres"
+                    - name: KONG_DECLARATIVE_CONFIG
+                      value: "/usr/local/kong/declarative/kong.yml"
+                    - name: KONG_PG_DATABASE
+                      value: "kong"
+                    - name: KONG_PG_HOST
+                      value: "postgres-kong-db"
+                    - name: KONG_PG_PASSWORD
+                      value: "kong"
+                    - name: KONG_PG_USER
+                      value: "kong"
+                    - name: KONG_PROXY_LISTEN
+                      value: "0.0.0.0:8000"
+                  livenessProbe:
+                    exec:
+                        command: [kong health]
+                    periodSeconds: 30
+                    timeoutSeconds: 10
+                    failureThreshold: 5
+                  ports:
+                    - name: kong-8000
+                      containerPort: 8000
+                    - name: kong-8001
+                      containerPort: 8001
+                    - name: kong-8443
+                      containerPort: 8443
+                    - name: kong-8444
+                      containerPort: 8444
+                    - name: kong-8002
+                      containerPort: 8002
+                  volumeMounts:
+                    - name: usr-local-kong-declarative-kong-yml
+                      mountPath: /usr/local/kong/declarative/kong.yml
+                      readOnly: true
+            volumes:
+                - name: usr-local-kong-declarative-kong-yml
+                  hostPath:
+                    path: /Users/bngams/Courses/cesi/maalsi-24-ORL/microservices-demo/ops/config/kong/kong.yml
+                  readOnly: true

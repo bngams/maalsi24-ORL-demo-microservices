@@ -1,0 +1,56 @@
+#! consul-deployment.yaml
+# Generated code, do not edit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: consul
+    namespace: docker
+    labels:
+        com.docker.compose.project: docker
+        com.docker.compose.service: consul
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            com.docker.compose.project: docker
+            com.docker.compose.service: consul
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                com.docker.compose.project: docker
+                com.docker.compose.service: consul
+                com.docker.compose.network.microservices-network: "true"
+        spec:
+            containers:
+                - name: consul
+                  image: hashicorp/consul:latest
+                  imagePullPolicy: IfNotPresent
+                  args:
+                    - agent
+                    - -server
+                    - -ui
+                    - -bootstrap-expect=1
+                    - -client=0.0.0.0
+                  env:
+                    - name: CONSUL_BIND_INTERFACE
+                      value: "eth0"
+                  livenessProbe:
+                    exec:
+                        command: [consul members]
+                    periodSeconds: 10
+                    timeoutSeconds: 5
+                    failureThreshold: 3
+                  ports:
+                    - name: consul-8500
+                      containerPort: 8500
+                    - name: consul-8600
+                      containerPort: 8600
+                  volumeMounts:
+                    - name: consul-data
+                      mountPath: /consul/data
+            volumes:
+                - name: consul-data
+                  persistentVolumeClaim:
+                    claimName: consul-consul-data
