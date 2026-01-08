@@ -20,6 +20,8 @@
     "docker:up": "cd ops/docker && docker compose up -d",
     "docker:up:ab": "cd ops/docker && docker compose --profile ab up -d",
     "docker:up:marketplace": "cd ops/docker && docker compose --profile marketplace up -d",
+    "docker:up:logs": "cd ops/docker && docker compose --profile logs up -d",
+    "docker:up:metrics": "cd ops/docker && docker compose --profile metrics up -d",
     "docker:up:all": "cd ops/docker && docker compose --profile all up -d",
     "docker:down": "cd ops/docker && docker compose --profile all down",
     "docker:logs": "cd ops/docker && docker compose logs -f",

@@ -12,4 +12,5 @@
 
 include:
   - compose-tools.yml
+  - compose-obs.yml
   - compose-apps.yml

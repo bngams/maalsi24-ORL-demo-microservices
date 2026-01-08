@@ -1,0 +1,127 @@
+version: '3.8'
+
+
+services:
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - 3030:3000
+    volumes:
+      - ../config/obs/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yaml
+    environment:
+      # testing mode without account...
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    networks:
+      - microservices-network
+    # labels:
+    # - expose with traefik instead ports...
+
+  loki:
+    profiles:
+      - logs
+      - all
+    hostname: loki
+    image: grafana/loki:latest
+    ports:
+      - 3100:3100
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - microservices-network
+
+  promtail:
+    profiles:
+      - logs
+      - all
+    image:  grafana/promtail:latest
+    container_name: promtail
+    volumes:
+      - ../config/obs/promtail.yaml:/etc/promtail/docker-config.yaml
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: -config.file=/etc/promtail/docker-config.yaml
+    depends_on:
+      - loki
+    networks:
+      - microservices-network
+
+  prometheus:
+    profiles:
+      - metrics
+      - all
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    volumes:
+      - ../config/obs/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - 9090:9090
+    networks:
+      - microservices-network
+  
+  node-exporter:
+    profiles:
+      - metrics
+      - all
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    expose:
+      - 9100
+    networks:
+      - microservices-network
+
+  cadvisor:
+    profiles:
+      - metrics
+      - all
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    expose:
+      - 8080
+    networks:
+      - microservices-network
+
+  telegraf:
+    profiles:
+      - influx
+      - all
+    image: telegraf
+    hostname: telegraf
+    container_name: telegraf
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../config/obs/telegraf.conf:/etc/telegraf/telegraf.conf
+    labels:
+      - "traefik.enable=false"
+
+  influxdb:
+    profiles:
+      - influx
+      - all
+    image: influxdb
+    hostname: influxdb
+    container_name: influxdb
+    volumes:
+      - data_influxdb:/var/lib/influxdb
+    labels:
+      - "traefik.enable=false"
+
+volumes:
+  data_influxdb:
+    name: data_influxdb

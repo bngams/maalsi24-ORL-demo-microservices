@@ -18,8 +18,14 @@ COPY shared/ ./shared/
 # Install all dependencies (including dev dependencies for building)
 RUN npm ci
 
+# Build shared modules
+WORKDIR /app/shared/consul
+RUN npm ci
+RUN npm run build
+
 # Copy the specific service source code
 # The SERVICE_PATH will be passed as a build arg
+WORKDIR /app
 ARG SERVICE_PATH
 COPY ${SERVICE_PATH} ./${SERVICE_PATH}
 
@@ -37,13 +43,18 @@ WORKDIR /app
 COPY package*.json ./
 COPY turbo.json ./
 
-# Copy shared libraries
-COPY shared/ ./shared/
+# Copy shared module package.json only (we'll copy built dist later)
+COPY shared/consul/package*.json ./shared/consul/
 
-# Install root dependencies (production only)
+# Install root dependencies (production only) - this should install workspace dependencies
+RUN npm ci --only=production
+
+# Install shared module production dependencies
+WORKDIR /app/shared/consul
 RUN npm ci --only=production
 
 # Copy the specific service package.json
+WORKDIR /app
 ARG SERVICE_PATH
 COPY ${SERVICE_PATH}/package*.json ./${SERVICE_PATH}/
 
@@ -56,8 +67,8 @@ RUN npm ci --only=production
 # Copy built artifacts from builder
 COPY --from=builder /app/${SERVICE_PATH}/dist ./dist
 
-# Copy shared modules if needed at runtime
-COPY --from=builder /app/shared /app/shared
+# Copy pre-built shared module from builder
+COPY --from=builder /app/shared/consul/dist /app/shared/consul/dist
 
 # Expose port (will be overridden by docker-compose)
 EXPOSE 3000
